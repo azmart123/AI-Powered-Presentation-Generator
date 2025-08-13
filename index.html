@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-Powered Presentation Generator</title>
+    <!-- Tailwind CSS for modern, responsive styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Lucide Icons for a modern look -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 1200px;
+        }
+        .loading-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(5px);
+            z-index: 100;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #000;
+            animation: spin 1s ease infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .slide {
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+        .slide:hover {
+            transform: translateY(-5px);
+        }
+        .theme-button:checked + label {
+            outline: 3px solid #6366f1;
+            outline-offset: 3px;
+        }
+        .layout-radio:checked + label {
+            border-color: #4f46e5;
+            background-color: #eef2ff;
+        }
+        /* Custom styles for PDF generation to ensure each slide is on its own page */
+        .slide-for-pdf {
+            width: 800px; /* A standard slide width */
+            height: 600px; /* A standard slide height */
+            padding: 2rem;
+            box-shadow: none;
+            page-break-after: always;
+            box-sizing: border-box;
+        }
+        .image-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(0, 0, 0, 0.1);
+            border-radius: 1rem;
+        }
+    </style>
+    <!-- html2pdf.js library for direct PDF downloading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+</head>
+<body class="bg-gray-100 text-gray-800 antialiased">
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-container hidden flex-col items-center justify-center">
+        <div class="flex flex-col items-center p-8 bg-white rounded-3xl shadow-2xl animate-fade-in-up">
+            <div class="spinner mb-4 border-indigo-500 border-l-transparent"></div>
+            <p class="text-xl text-gray-700 font-semibold animate-pulse">Generating your presentation...</p>
+        </div>
+    </div>
+
+    <!-- Main Application Wrapper -->
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center my-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-indigo-700 mb-2">AI-Powered Presentation Generator</h1>
+            <p class="text-lg text-gray-600">Enter a topic and let AI create a beautiful presentation for you.</p>
+        </header>
+
+        <main class="bg-white p-6 md:p-10 rounded-3xl shadow-xl">
+            <!-- User Input Form -->
+            <div class="mb-8">
+                <label for="topic-input" class="block text-xl font-semibold text-gray-700 mb-3">Presentation Topic</label>
+                <div class="relative">
+                    <textarea id="topic-input" rows="3" class="w-full p-4 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-indigo-200 focus:border-indigo-500 transition-all duration-300 resize-none text-lg pr-12" placeholder="e.g., The future of electric vehicles, a guide to modern web design, history of space exploration..."></textarea>
+                    <button id="voice-input-button" class="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-gray-200 hover:bg-gray-300 transition-colors duration-200" title="Use voice input">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-mic w-5 h-5 text-gray-600">
+                            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Advanced Options Section -->
+            <div class="mb-8">
+                <button id="toggle-advanced-options" class="w-full text-left font-semibold text-indigo-600 hover:text-indigo-800 transition-colors duration-200 focus:outline-none flex items-center gap-2">
+                    <i data-lucide="chevron-down"></i> <span>Show Advanced Options</span>
+                </button>
+                <div id="advanced-options" class="mt-4 hidden space-y-6 transition-all duration-300 overflow-hidden">
+                    <!-- Slide Count -->
+                    <div>
+                        <label for="slide-count" class="block font-semibold text-gray-700 mb-2">Slide Count</label>
+                        <input type="number" id="slide-count" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" value="5" min="3" max="15">
+                    </div>
+                    <!-- Detail Level -->
+                    <div>
+                        <label class="block font-semibold text-gray-700 mb-2">Detail Level</label>
+                        <select id="detail-level" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500">
+                            <option value="high-level">High-level Overview</option>
+                            <option value="standard" selected>Standard</option>
+                            <option value="detailed">Detailed</option>
+                            <option value="basic">Basic</option>
+                            <option value="intermediate">Intermediate</option>
+                            <option value="advanced">Advanced</option>
+                        </select>
+                    </div>
+                    <!-- Presentation Style -->
+                    <div>
+                        <label class="block font-semibold text-gray-700 mb-2">Presentation Style</label>
+                        <select id="presentation-style" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500">
+                            <option value="professional" selected>Professional</option>
+                            <option value="conversational">Conversational</option>
+                            <option value="academic">Academic</option>
+                            <option value="business">Business</option>
+                            <option value="casual">Casual</option>
+                            <option value="technical">Technical</option>
+                        </select>
+                    </div>
+                    <!-- Target Audience -->
+                    <div>
+                        <label for="target-audience" class="block font-semibold text-gray-700 mb-2">Target Audience</label>
+                        <input type="text" id="target-audience" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" placeholder="e.g., high school students, industry experts, general public">
+                    </div>
+                    <!-- New settings -->
+                    <div>
+                        <label for="brand-name" class="block font-semibold text-gray-700 mb-2">Brand Name (Optional)</label>
+                        <input type="text" id="brand-name" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" placeholder="e.g., My Company, Project X">
+                    </div>
+                    <div>
+                        <label for="key-takeaway" class="block font-semibold text-gray-700 mb-2">Key Takeaway (Optional)</label>
+                        <textarea id="key-takeaway" rows="2" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 resize-none" placeholder="e.g., AI is revolutionizing presentation design."></textarea>
+                    </div>
+                    <div>
+                        <label for="additional-keywords" class="block font-semibold text-gray-700 mb-2">Additional Keywords (Optional)</label>
+                        <input type="text" id="additional-keywords" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" placeholder="e.g., technology, innovation, future trends">
+                    </div>
+                    <div>
+                        <label for="tone" class="block font-semibold text-gray-700 mb-2">Tone (Optional)</label>
+                        <input type="text" id="tone" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" placeholder="e.g., formal, persuasive, inspiring">
+                    </div>
+                    <div>
+                        <label for="image-style" class="block font-semibold text-gray-700 mb-2">Image Style (Optional)</label>
+                        <input type="text" id="image-style" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500" placeholder="e.g., minimalist, realistic, cartoon, abstract">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customization Options -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                <!-- Theme Selector -->
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-700 mb-3">Choose Themes</h2>
+                    <div class="flex flex-wrap gap-4">
+                        <div class="flex flex-col items-center">
+                            <span class="text-sm text-gray-500 mb-1">Primary</span>
+                            <div class="flex flex-wrap gap-2">
+                                <input type="radio" id="theme-primary-default" name="theme-primary-selector" value="default" class="hidden theme-button" checked>
+                                <label for="theme-primary-default" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-indigo-500 to-purple-600 border-2 border-transparent hover:scale-110" title="Default Theme"></label>
+                                
+                                <input type="radio" id="theme-primary-ocean" name="theme-primary-selector" value="ocean" class="hidden theme-button">
+                                <label for="theme-primary-ocean" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-blue-400 to-cyan-500 border-2 border-transparent hover:scale-110" title="Ocean Theme"></label>
+                                
+                                <input type="radio" id="theme-primary-forest" name="theme-primary-selector" value="forest" class="hidden theme-button">
+                                <label for="theme-primary-forest" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-green-400 to-emerald-600 border-2 border-transparent hover:scale-110" title="Forest Theme"></label>
+                                
+                                <input type="radio" id="theme-primary-sunset" name="theme-primary-selector" value="sunset" class="hidden theme-button">
+                                <label for="theme-primary-sunset" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-orange-400 to-red-500 border-2 border-transparent hover:scale-110" title="Sunset Theme"></label>
+                                
+                                <input type="radio" id="theme-primary-charcoal" name="theme-primary-selector" value="charcoal" class="hidden theme-button">
+                                <label for="theme-primary-charcoal" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-gray-700 to-gray-900 border-2 border-transparent hover:scale-110" title="Charcoal Theme"></label>
+
+                                <input type="radio" id="theme-primary-vintage" name="theme-primary-selector" value="vintage" class="hidden theme-button">
+                                <label for="theme-primary-vintage" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-amber-200 to-amber-500 border-2 border-transparent hover:scale-110" title="Vintage Theme"></label>
+                                
+                                <input type="radio" id="theme-primary-vibrant" name="theme-primary-selector" value="vibrant" class="hidden theme-button">
+                                <label for="theme-primary-vibrant" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-pink-500 to-yellow-300 border-2 border-transparent hover:scale-110" title="Vibrant Theme"></label>
+                                
+                                <input type="radio" id="theme-primary-monochrome" name="theme-primary-selector" value="monochrome" class="hidden theme-button">
+                                <label for="theme-primary-monochrome" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-gray-200 to-gray-800 border-2 border-transparent hover:scale-110" title="Monochrome Theme"></label>
+
+                                <input type="radio" id="theme-primary-neon" name="theme-primary-selector" value="neon" class="hidden theme-button">
+                                <label for="theme-primary-neon" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-indigo-900 to-fuchsia-900 border-2 border-transparent hover:scale-110" title="Neon Theme"></label>
+                            </div>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <span class="text-sm text-gray-500 mb-1">Secondary</span>
+                            <div class="flex flex-wrap gap-2">
+                                <input type="radio" id="theme-secondary-none" name="theme-secondary-selector" value="none" class="hidden theme-button" checked>
+                                <label for="theme-secondary-none" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-white border-2 border-transparent hover:scale-110 text-gray-500" title="None">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-x w-4 h-4"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                </label>
+                                
+                                <input type="radio" id="theme-secondary-default" name="theme-secondary-selector" value="default" class="hidden theme-button">
+                                <label for="theme-secondary-default" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-indigo-500 to-purple-600 border-2 border-transparent hover:scale-110" title="Default Theme"></label>
+                                
+                                <input type="radio" id="theme-secondary-ocean" name="theme-secondary-selector" value="ocean" class="hidden theme-button">
+                                <label for="theme-secondary-ocean" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-blue-400 to-cyan-500 border-2 border-transparent hover:scale-110" title="Ocean Theme"></label>
+                                
+                                <input type="radio" id="theme-secondary-forest" name="theme-secondary-selector" value="forest" class="hidden theme-button">
+                                <label for="theme-secondary-forest" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-green-400 to-emerald-600 border-2 border-transparent hover:scale-110" title="Forest Theme"></label>
+                                
+                                <input type="radio" id="theme-secondary-sunset" name="theme-secondary-selector" value="sunset" class="hidden theme-button">
+                                <label for="theme-secondary-sunset" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-orange-400 to-red-500 border-2 border-transparent hover:scale-110" title="Sunset Theme"></label>
+                                
+                                <input type="radio" id="theme-secondary-charcoal" name="theme-secondary-selector" value="charcoal" class="hidden theme-button">
+                                <label for="theme-secondary-charcoal" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-gray-700 to-gray-900 border-2 border-transparent hover:scale-110" title="Charcoal Theme"></label>
+
+                                <input type="radio" id="theme-secondary-vintage" name="theme-secondary-selector" value="vintage" class="hidden theme-button">
+                                <label for="theme-secondary-vintage" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-amber-200 to-amber-500 border-2 border-transparent hover:scale-110" title="Vintage Theme"></label>
+                                
+                                <input type="radio" id="theme-secondary-vibrant" name="theme-secondary-selector" value="vibrant" class="hidden theme-button">
+                                <label for="theme-secondary-vibrant" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-pink-500 to-yellow-300 border-2 border-transparent hover:scale-110" title="Vibrant Theme"></label>
+                                
+                                <input type="radio" id="theme-secondary-monochrome" name="theme-secondary-selector" value="monochrome" class="hidden theme-button">
+                                <label for="theme-secondary-monochrome" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-gray-200 to-gray-800 border-2 border-transparent hover:scale-110" title="Monochrome Theme"></label>
+
+                                <input type="radio" id="theme-secondary-neon" name="theme-secondary-selector" value="neon" class="hidden theme-button">
+                                <label for="theme-secondary-neon" class="w-8 h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center p-1 bg-gradient-to-br from-indigo-900 to-fuchsia-900 border-2 border-transparent hover:scale-110" title="Neon Theme"></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layout Selector -->
+                <div>
+                    <h2 class="text-xl font-semibold text-gray-700 mb-3">Choose a Layout</h2>
+                    <div class="flex flex-wrap gap-4">
+                        <!-- Layout 1: Image Left -->
+                        <input type="radio" id="layout-img-left" name="layout-selector" value="img-left" class="hidden layout-radio" checked>
+                        <label for="layout-img-left" class="p-3 border-2 border-gray-300 rounded-xl cursor-pointer transition-all duration-200 hover:bg-gray-50 flex flex-col items-center text-center">
+                            <span class="text-sm text-gray-500">Image Left</span>
+                            <div class="flex w-16 h-10 mt-1">
+                                <div class="bg-gray-400 w-1/2 rounded-l-md"></div>
+                                <div class="flex-1 bg-gray-200 p-1 rounded-r-md flex flex-col gap-1">
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                </div>
+                            </div>
+                        </label>
+                        
+                        <!-- Layout 2: Image Right -->
+                        <input type="radio" id="layout-img-right" name="layout-selector" value="img-right" class="hidden layout-radio">
+                        <label for="layout-img-right" class="p-3 border-2 border-gray-300 rounded-xl cursor-pointer transition-all duration-200 hover:bg-gray-50 flex flex-col items-center text-center">
+                            <span class="text-sm text-gray-500">Image Right</span>
+                            <div class="flex w-16 h-10 mt-1">
+                                <div class="flex-1 bg-gray-200 p-1 rounded-l-md flex flex-col gap-1">
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                </div>
+                                <div class="bg-gray-400 w-1/2 rounded-r-md"></div>
+                            </div>
+                        </label>
+                        
+                        <!-- Layout 3: Full Image -->
+                        <input type="radio" id="layout-full-image" name="layout-selector" value="full-image" class="hidden layout-radio">
+                        <label for="layout-full-image" class="p-3 border-2 border-gray-300 rounded-xl cursor-pointer transition-all duration-200 hover:bg-gray-50 flex flex-col items-center text-center">
+                            <span class="text-sm text-gray-500">Full Image</span>
+                            <div class="relative w-16 h-10 mt-1 rounded-md bg-gray-400">
+                                <div class="absolute inset-0 bg-gray-800 opacity-50 rounded-md"></div>
+                                <div class="absolute inset-x-1 bottom-1 h-1/3 bg-gray-200 rounded-sm"></div>
+                            </div>
+                        </label>
+                        
+                        <!-- Title Only -->
+                        <input type="radio" id="layout-title-only" name="layout-selector" value="title-only" class="hidden layout-radio">
+                        <label for="layout-title-only" class="p-3 border-2 border-gray-300 rounded-xl cursor-pointer transition-all duration-200 hover:bg-gray-50 flex flex-col items-center text-center">
+                            <span class="text-sm text-gray-500">Title Only</span>
+                            <div class="flex w-16 h-10 mt-1 justify-center items-center p-2 rounded-md bg-gray-200">
+                                <div class="w-full h-1/3 bg-gray-400 rounded-sm"></div>
+                            </div>
+                        </label>
+                        
+                        <!-- Split Columns -->
+                        <input type="radio" id="layout-split-columns" name="layout-selector" value="split-columns" class="hidden layout-radio">
+                        <label for="layout-split-columns" class="p-3 border-2 border-gray-300 rounded-xl cursor-pointer transition-all duration-200 hover:bg-gray-50 flex flex-col items-center text-center">
+                            <span class="text-sm text-gray-500">Split Columns</span>
+                            <div class="flex w-16 h-10 mt-1 p-1 rounded-md bg-gray-200 gap-1">
+                                <div class="flex-1 flex flex-col gap-1">
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                </div>
+                                <div class="flex-1 flex flex-col gap-1">
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                    <div class="h-1/4 bg-gray-400 rounded-sm"></div>
+                                </div>
+                            </div>
+                        </label>
+                        
+                        <!-- New Layout: Quote -->
+                        <input type="radio" id="layout-quote" name="layout-selector" value="quote" class="hidden layout-radio">
+                        <label for="layout-quote" class="p-3 border-2 border-gray-300 rounded-xl cursor-pointer transition-all duration-200 hover:bg-gray-50 flex flex-col items-center text-center">
+                            <span class="text-sm text-gray-500">Quote</span>
+                            <div class="relative w-16 h-10 mt-1 flex justify-center items-center p-1 rounded-md bg-gray-200">
+                                <div class="w-3/4 h-1/3 bg-gray-400 rounded-sm"></div>
+                            </div>
+                        </label>
+
+                        <!-- New Layout: Image Grid -->
+                        <input type="radio" id="layout-image-grid" name="layout-selector" value="image-grid" class="hidden layout-radio">
+                        <label for="layout-image-grid" class="p-3 border-2 border-gray-300 rounded-xl cursor-pointer transition-all duration-200 hover:bg-gray-50 flex flex-col items-center text-center">
+                            <span class="text-sm text-gray-500">Image Grid</span>
+                            <div class="grid grid-cols-2 grid-rows-2 w-16 h-10 mt-1 gap-1 p-1 bg-gray-200 rounded-md">
+                                <div class="bg-gray-400 rounded-sm"></div>
+                                <div class="bg-gray-400 rounded-sm"></div>
+                                <div class="bg-gray-400 rounded-sm"></div>
+                                <div class="bg-gray-400 rounded-sm"></div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex flex-wrap justify-center mt-6 gap-4">
+                <button id="generate-button" class="px-8 py-4 bg-indigo-600 text-white font-bold rounded-2xl shadow-lg hover:bg-indigo-700 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-indigo-300 text-lg flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles">
+                        <path d="m12 3-1.9 2.1c-.2.2-.5.3-.8.3-.3 0-.6-.1-.8-.3-.2-.2-.3-.5-.3-.8 0-.3.1-.6.3-.8L12 1.9c.2-.2.5-.3.8-.3s.6.1.8.3.3.5.3.8-.1.6-.3.8L12 3Z"/>
+                        <path d="m12 21-1.9-2.1c-.2-.2-.5-.3-.8-.3-.3 0-.6.1-.8.3-.2.2-.3.5-.3.8 0 .3.1.6.3.8L12 22.1c.2.2.5.3.8.3s.6-.1.8-.3.3-.5.3-.8 0-.3-.1-.6L12 21Z"/>
+                        <path d="m21 12-2.1-1.9c-.2-.2-.3-.5-.3-.8s.1-.6.3-.8L22.1 12c.2.2.3.5.3.8s-.1.6-.3.8L21 12Z"/>
+                        <path d="m3 12 2.1-1.9c-.2-.2.3-.5.3-.8s-.1-.6-.3-.8L1.9 12c-.2.2-.3.5-.3.8s.1.6.3.8L3 12Z"/>
+                        <path d="m16 8-2 2h-4l-2-2m4-4h-4"/>
+                    </svg>
+                    <span>Generate Presentation</span>
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Presentation Preview Area -->
+    <div id="presentation-preview" class="p-4 md:p-8 pt-0 slide-container hidden">
+        <div class="flex flex-wrap justify-between items-center my-6 gap-4">
+            <h2 class="text-3xl font-bold text-gray-700">Your Presentation</h2>
+            <div class="flex flex-wrap justify-end items-center gap-4">
+                <button id="generate-summary-button" class="px-6 py-3 bg-fuchsia-600 text-white font-bold rounded-xl shadow-lg hover:bg-fuchsia-700 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-fuchsia-300 hidden flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-text w-5 h-5">
+                        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+                        <path d="M14 2v4a2 2 0 0 0 2 2h4"/>
+                        <path d="M8 12h8"/><path d="M8 18h8"/><path d="M8 15h8"/>
+                    </svg>
+                    <span>Generate Summary</span>
+                </button>
+                <button id="suggest-titles-button" class="px-6 py-3 bg-purple-600 text-white font-bold rounded-xl shadow-lg hover:bg-purple-700 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-purple-300 hidden flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-pen-tool w-5 h-5">
+                        <path d="m12 19 7-7 3 3-7 7-3-3z"/>
+                        <path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+                        <path d="m2 2 7.586 7.586"/>
+                        <circle cx="11" cy="11" r="2"/>
+                    </svg>
+                    <span>Suggest Titles</span>
+                </button>
+                <button id="generate-notes-button" class="px-6 py-3 bg-pink-600 text-white font-bold rounded-xl shadow-lg hover:bg-pink-700 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-pink-300 hidden flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sticky-note w-5 h-5">
+                        <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
+                        <path d="M15 2H9a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V4Z"/>
+                    </svg>
+                    <span>Generate Speaker Notes</span>
+                </button>
+                <button id="generate-qna-button" class="px-6 py-3 bg-orange-600 text-white font-bold rounded-xl shadow-lg hover:bg-orange-700 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-orange-300 hidden flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-help-circle w-5 h-5">
+                        <circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>
+                    </svg>
+                    <span>Generate Q&A</span>
+                </button>
+                <button id="download-button" class="px-6 py-3 bg-green-600 text-white font-bold rounded-xl shadow-lg hover:bg-green-700 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-green-300 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-download w-5 h-5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>
+                    </svg>
+                    <span>Download as PDF</span>
+                </button>
+            </div>
+        </div>
+        <!-- New containers for generated summary and titles -->
+        <div id="summary-container" class="mt-4 p-6 bg-white rounded-xl shadow-lg hidden"></div>
+        <div id="titles-container" class="mt-4 p-6 bg-white rounded-xl shadow-lg hidden"></div>
+        <div id="qna-container" class="mt-4 p-6 bg-white rounded-xl shadow-lg hidden"></div>
+        <div id="slides-area" class="grid gap-8 grid-cols-1">
+            <!-- Slides will be injected here by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Modal for refining content -->
+    <div id="refine-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-2xl">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Refine Slide Content</h3>
+            <p class="text-gray-600 mb-4">Enter your request to modify the content of this slide. For example: "make these points more concise" or "expand on the first point."</p>
+            <textarea id="refine-input" rows="4" class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-200 focus:border-indigo-500 transition-all duration-300 resize-none"></textarea>
+            <div class="mt-6 flex justify-end gap-4">
+                <button id="cancel-refine-button" class="px-6 py-3 bg-gray-300 text-gray-800 font-semibold rounded-xl hover:bg-gray-400 transition-colors">Cancel</button>
+                <button id="confirm-refine-button" class="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles"><path d="m12 3-1.9 2.1c-.2.2-.5.3-.8.3-.3 0-.6-.1-.8-.3-.2-.2-.3-.5-.3-.8 0-.3.1-.6.3-.8L12 1.9c.2-.2.5-.3.8-.3s.6.1.8.3.3.5.3.8-.1.6-.3.8L12 3Z"/><path d="m12 21-1.9-2.1c-.2-.2-.5-.3-.8-.3-.3 0-.6.1-.8.3-.2.2-.3.5-.3.8 0 .3.1.6.3.8L12 22.1c.2.2.5.3.8.3s.6-.1.8-.3.3-.5.3-.8 0-.3-.1-.6L12 21Z"/><path d="m21 12-2.1-1.9c-.2-.2-.3-.5-.3-.8s.1-.6.3-.8L22.1 12c.2.2.3.5.3.8s-.1.6-.3.8L21 12Z"/><path d="m3 12 2.1-1.9c-.2-.2.3-.5.3-.8s-.1-.6-.3-.8L1.9 12c-.2.2-.3.5-.3.8s.1.6.3.8L3 12Z"/><path d="m16 8-2 2h-4l-2-2m4-4h-4"/></svg>
+                    <span>Refine</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const generateButton = document.getElementById('generate-button');
+            const downloadButton = document.getElementById('download-button');
+            const generateSummaryButton = document.getElementById('generate-summary-button');
+            const suggestTitlesButton = document.getElementById('suggest-titles-button');
+            const generateNotesButton = document.getElementById('generate-notes-button');
+            const generateQnaButton = document.getElementById('generate-qna-button');
+            const topicInput = document.getElementById('topic-input');
+            const voiceInputButton = document.getElementById('voice-input-button');
+            const presentationPreview = document.getElementById('presentation-preview');
+            const slidesArea = document.getElementById('slides-area');
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const summaryContainer = document.getElementById('summary-container');
+            const titlesContainer = document.getElementById('titles-container');
+            const qnaContainer = document.getElementById('qna-container');
+            const toggleAdvancedOptionsButton = document.getElementById('toggle-advanced-options');
+            const advancedOptionsSection = document.getElementById('advanced-options');
+            const slideCountInput = document.getElementById('slide-count');
+            const detailLevelInput = document.getElementById('detail-level');
+            const presentationStyleInput = document.getElementById('presentation-style');
+            const targetAudienceInput = document.getElementById('target-audience');
+            const brandNameInput = document.getElementById('brand-name');
+            const keyTakeawayInput = document.getElementById('key-takeaway');
+            const additionalKeywordsInput = document.getElementById('additional-keywords');
+            const toneInput = document.getElementById('tone');
+            const imageStyleInput = document.getElementById('image-style');
+            
+            const refineModal = document.getElementById('refine-modal');
+            const refineInput = document.getElementById('refine-input');
+            const confirmRefineButton = document.getElementById('confirm-refine-button');
+            const cancelRefineButton = document.getElementById('cancel-refine-button');
+            let currentSlidesData = null; // Store the presentation data globally
+
+            // Themes and their colors
+            const themes = {
+                default: {
+                    background: 'bg-gradient-to-br from-indigo-500 to-purple-600',
+                    text: 'text-white',
+                    bullets: 'list-disc text-gray-200'
+                },
+                ocean: {
+                    background: 'bg-gradient-to-br from-blue-400 to-cyan-500',
+                    text: 'text-white',
+                    bullets: 'list-disc text-gray-100'
+                },
+                forest: {
+                    background: 'bg-gradient-to-br from-green-400 to-emerald-600',
+                    text: 'text-white',
+                    bullets: 'list-disc text-gray-100'
+                },
+                sunset: {
+                    background: 'bg-gradient-to-br from-orange-400 to-red-500',
+                    text: 'text-white',
+                    bullets: 'list-disc text-gray-100'
+                },
+                charcoal: {
+                    background: 'bg-gradient-to-br from-gray-700 to-gray-900',
+                    text: 'text-gray-100',
+                    bullets: 'list-disc text-gray-400'
+                },
+                vintage: {
+                    background: 'bg-gradient-to-br from-amber-200 to-amber-500',
+                    text: 'text-gray-800',
+                    bullets: 'list-disc text-gray-700'
+                },
+                vibrant: {
+                    background: 'bg-gradient-to-br from-pink-500 to-yellow-300',
+                    text: 'text-gray-800',
+                    bullets: 'list-disc text-gray-700'
+                },
+                monochrome: {
+                    background: 'bg-gradient-to-br from-gray-200 to-gray-800',
+                    text: 'text-white',
+                    bullets: 'list-disc text-gray-300'
+                },
+                neon: {
+                    background: 'bg-gradient-to-br from-indigo-900 to-fuchsia-900',
+                    text: 'text-white',
+                    bullets: 'list-disc text-pink-300'
+                }
+            };
+            
+            // Function to show/hide the loading overlay
+            const setLoading = (isLoading) => {
+                loadingOverlay.classList.toggle('hidden', !isLoading);
+                if (generateButton) {
+                    generateButton.disabled = isLoading;
+                    const buttonIcon = generateButton.querySelector('i');
+                    if (buttonIcon) {
+                        if (isLoading) {
+                            buttonIcon.setAttribute('data-lucide', 'rotate-cw');
+                            buttonIcon.classList.add('animate-spin');
+                        } else {
+                            buttonIcon.setAttribute('data-lucide', 'sparkles');
+                            buttonIcon.classList.remove('animate-spin');
+                        }
+                    }
+                    lucide.createIcons();
+                }
+            };
+            
+            // Function to show a custom message box
+            const showMessage = (text, type = 'info') => {
+                const messageBox = document.createElement('div');
+                let bgColor = 'bg-yellow-400';
+                let textColor = 'text-gray-800';
+                if (type === 'error') {
+                    bgColor = 'bg-red-500';
+                    textColor = 'text-white';
+                }
+                messageBox.className = `fixed top-4 right-4 p-4 ${bgColor} ${textColor} rounded-lg shadow-lg z-50 animate-fade-in-down`;
+                messageBox.textContent = text;
+                document.body.appendChild(messageBox);
+                setTimeout(() => messageBox.remove(), 3000);
+            };
+
+            // Helper function for exponential backoff on fetch calls
+            const fetchWithBackoff = async (url, options, maxRetries = 5) => {
+                let delay = 1000; // 1 second
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        const response = await fetch(url, options);
+                        if (response.ok) {
+                            return response;
+                        }
+                        console.warn(`Attempt ${i + 1} failed with status ${response.status}. Retrying in ${delay}ms...`);
+                    } catch (error) {
+                        console.warn(`Attempt ${i + 1} failed with error: ${error.message}. Retrying in ${delay}ms...`);
+                    }
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 2;
+                }
+                throw new Error('Max retries exceeded.');
+            };
+
+            // Async function to generate an image using Imagen API
+            const generateImage = async (prompt) => {
+                const imageStyle = imageStyleInput.value.trim();
+                const imagePrompt = `${prompt} ${imageStyle ? `, in a ${imageStyle} style` : ''} --ar 16:9`;
+
+                const payload = { instances: { prompt: imagePrompt }, parameters: { "sampleCount": 1} };
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+                
+                try {
+                    const response = await fetchWithBackoff(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    
+                    const result = await response.json();
+                    if (result.predictions && result.predictions.length > 0 && result.predictions[0].bytesBase64Encoded) {
+                        return `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+                    } else {
+                        console.error('Image generation failed or returned an empty response:', result);
+                        return null;
+                    }
+                } catch (error) {
+                    console.error('Error generating image:', error);
+                    return null;
+                }
+            };
+            
+            // Async function to generate speaker notes using Gemini API
+            const generateSpeakerNotes = async (slideTitle, slidePoints) => {
+                const prompt = `Based on the following presentation slide, write a detailed set of speaker notes. The notes should expand on each bullet point and provide context for a presenter.
+                Slide Title: "${slideTitle}"
+                Bullet Points: ${slidePoints.join(', ')}
+                Speaker Notes:`;
+                
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = {
+                    contents: chatHistory
+                };
+                
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                
+                try {
+                    const response = await fetchWithBackoff(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    if (result.candidates && result.candidates.length > 0 && result.candidates[0].content && result.candidates[0].content.parts && result.candidates[0].content.parts.length > 0) {
+                        return result.candidates[0].content.parts[0].text;
+                    } else {
+                        console.error('Unexpected API response structure for speaker notes:', result);
+                        return 'Could not generate speaker notes due to an unexpected API response.';
+                    }
+                } catch (error) {
+                    console.error('Error generating speaker notes:', error);
+                    return 'Could not generate speaker notes.';
+                }
+            };
+
+            // New: Async function to generate a presentation summary
+            const generateSummary = async (slidesData) => {
+                const combinedText = slidesData.map(slide => `Title: ${slide.title}\nPoints: ${slide.points.join('; ')}`).join('\n\n');
+                const brandName = brandNameInput.value.trim();
+                const keyTakeaway = keyTakeawayInput.value.trim();
+                let prompt = `Write a professional and concise summary (no more than 3-4 sentences) of the following presentation content:\n\n${combinedText}`;
+                if (brandName) {
+                    prompt += `\n\nThis summary should be from the perspective of a company named "${brandName}".`;
+                }
+                if (keyTakeaway) {
+                    prompt += `\n\nThe summary must also highlight the following key takeaway: "${keyTakeaway}".`;
+                }
+                
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = {
+                    contents: chatHistory
+                };
+                
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                try {
+                    const response = await fetchWithBackoff(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    return result.candidates[0].content.parts[0].text;
+                } catch (error) {
+                    console.error('Error generating summary:', error);
+                    return 'Could not generate a summary.';
+                }
+            };
+            
+            // New: Async function to generate presentation titles
+            const suggestTitles = async (topic) => {
+                const tone = toneInput.value.trim();
+                let prompt = `Suggest 3 creative and professional titles for a presentation on the topic: "${topic}".`;
+                if (tone) {
+                    prompt += ` The tone should be ${tone}.`;
+                }
+                prompt += ` Provide the titles as a numbered list.`;
+                
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = {
+                    contents: chatHistory
+                };
+                
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                try {
+                    const response = await fetchWithBackoff(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    return result.candidates[0].content.parts[0].text;
+                } catch (error) {
+                    console.error('Error suggesting titles:', error);
+                    return 'Could not suggest titles.';
+                }
+            };
+
+            // New: Async function to generate a Q&A section
+            const generateQnA = async (slidesData) => {
+                const combinedText = slidesData.map(slide => `Title: ${slide.title}\nPoints: ${slide.points.join('; ')}`).join('\n\n');
+                const prompt = `Based on the following presentation content, generate a list of 5 potential questions an audience might ask, along with a concise answer for each.
+                Presentation Content:\n\n${combinedText}\n\nFormat the output as a numbered list of Q&A pairs.`;
+                
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = {
+                    contents: chatHistory
+                };
+                
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                try {
+                    const response = await fetchWithBackoff(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    return result.candidates[0].content.parts[0].text;
+                } catch (error) {
+                    console.error('Error generating Q&A:', error);
+                    return 'Could not generate Q&A.';
+                }
+            };
+            
+            // Async function to refine a single slide's content
+            const refineSlideContent = async (slideTitle, slidePoints, refinementRequest) => {
+                const prompt = `Refine the following slide content based on this request: "${refinementRequest}".
+                Slide Title: "${slideTitle}"
+                Bullet Points: ${slidePoints.join('; ')}
+                
+                Provide the refined content as a JSON object with the following structure: { "title": "New Title", "points": ["New Point 1", "New Point 2"] }. Do not include any extra text.`;
+
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = {
+                    contents: chatHistory,
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                "title": { "type": "STRING" },
+                                "points": {
+                                    "type": "ARRAY",
+                                    "items": { "type": "STRING" }
+                                }
+                            },
+                            "propertyOrdering": ["title", "points"]
+                        }
+                    }
+                };
+
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                
+                try {
+                    const response = await fetchWithBackoff(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const result = await response.json();
+                    const jsonText = result.candidates[0].content.parts[0].text;
+                    return JSON.parse(jsonText);
+                } catch (error) {
+                    console.error('Error refining slide content:', error);
+                    return null;
+                }
+            };
+
+            // Function to handle voice input
+            const handleVoiceInput = () => {
+                const voiceIcon = voiceInputButton.querySelector('svg');
+                if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                    showMessage('Your browser does not support Web Speech API. Please use a compatible browser like Chrome or Edge.', 'error');
+                    if (voiceIcon) {
+                         voiceIcon.innerHTML = `<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" x2="12" y1="19" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                         voiceIcon.classList.remove('animate-pulse', 'text-red-500');
+                    }
+                    return;
+                }
+
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                const recognition = new SpeechRecognition();
+                recognition.interimResults = false;
+                recognition.lang = 'en-US';
+
+                recognition.onstart = () => {
+                    const icon = voiceInputButton.querySelector('svg');
+                    if (icon) {
+                        icon.innerHTML = `<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" x2="12" y1="19" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                        icon.classList.add('animate-pulse', 'text-red-500');
+                    }
+                    showMessage('Listening...', 'info');
+                };
+
+                recognition.onresult = (event) => {
+                    const last = event.results.length - 1;
+                    const transcript = event.results[last][0].transcript;
+                    topicInput.value = transcript;
+                };
+
+                recognition.onend = () => {
+                    const icon = voiceInputButton.querySelector('svg');
+                    if (icon) {
+                        icon.innerHTML = `<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" x2="12" y1="19" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                        icon.classList.remove('animate-pulse', 'text-red-500');
+                    }
+                };
+
+                recognition.onerror = (event) => {
+                    console.error('Speech recognition error:', event.error);
+                    showMessage(`Speech recognition error: ${event.error}`, 'error');
+                    const icon = voiceInputButton.querySelector('svg');
+                    if (icon) {
+                        icon.innerHTML = `<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 10v2a7 7 0 0 1-14 0v-2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" x2="12" y1="19" y2="22" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                        icon.classList.remove('animate-pulse', 'text-red-500');
+                    }
+                };
+
+                if (voiceInputButton.classList.contains('listening')) {
+                    recognition.stop();
+                    voiceInputButton.classList.remove('listening');
+                } else {
+                    recognition.start();
+                    voiceInputButton.classList.add('listening');
+                }
+            };
+
+            // Function to generate the slides based on the API response
+            const createSlides = async (slidesData) => {
+                if (!Array.isArray(slidesData)) {
+                    console.error('Invalid slides data received.');
+                    return;
+                }
+                
+                slidesArea.innerHTML = ''; // Clear previous slides
+                presentationPreview.classList.remove('hidden');
+                generateSummaryButton.classList.remove('hidden');
+                suggestTitlesButton.classList.remove('hidden');
+                generateNotesButton.classList.remove('hidden');
+                generateQnaButton.classList.remove('hidden');
+                
+                const themePrimaryRadios = document.querySelectorAll('input[name="theme-primary-selector"]');
+                const themeSecondaryRadios = document.querySelectorAll('input[name="theme-secondary-selector"]');
+                const layoutRadios = document.querySelectorAll('input[name="layout-selector"]');
+
+                const primaryTheme = themes[document.querySelector('input[name="theme-primary-selector"]:checked').value];
+                const secondaryThemeRadio = document.querySelector('input[name="theme-secondary-selector"]:checked');
+                const secondaryTheme = secondaryThemeRadio.value !== 'none' ? themes[secondaryThemeRadio.value] : null;
+                const currentLayout = document.querySelector('input[name="layout-selector"]:checked').value;
+
+                for (const [index, slide] of slidesData.entries()) {
+                    const currentTheme = (secondaryTheme && index % 2 !== 0) ? secondaryTheme : primaryTheme;
+                    const slideElement = document.createElement('div');
+                    slideElement.className = `slide slide-for-pdf p-8 md:p-12 rounded-3xl ${currentTheme.background} relative overflow-hidden transition-all duration-500`;
+                    
+                    const imageContainer = document.createElement('div');
+                    imageContainer.className = 'image-container';
+                    
+                    let slideContent = '';
+                    switch (currentLayout) {
+                        case 'img-left':
+                            slideContent = `
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 h-full">
+                                    <div class="order-2 md:order-1 flex items-center" id="image-container-${index}"></div>
+                                    <div class="order-1 md:order-2 flex flex-col justify-center ${currentTheme.text} space-y-4">
+                                        <h3 class="text-3xl md:text-4xl font-bold">${slide.title}</h3>
+                                        <ul class="${currentTheme.bullets} ml-6 space-y-2">
+                                            ${slide.points.map(point => `<li>${point}</li>`).join('')}
+                                        </ul>
+                                        <button class="refine-slide-button text-sm mt-4 text-white hover:text-indigo-200 transition-colors flex items-center gap-1">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles w-4 h-4"><path d="m12 3-1.9 2.1c-.2.2-.5.3-.8.3-.3 0-.6-.1-.8-.3-.2-.2-.3-.5-.3-.8 0-.3.1-.6.3-.8L12 1.9c.2-.2.5-.3.8-.3s.6.1.8.3.3.5.3.8-.1.6-.3.8L12 3Z"/><path d="m12 21-1.9-2.1c-.2-.2-.5-.3-.8-.3-.3 0-.6.1-.8.3-.2.2-.3.5-.3.8 0 .3.1.6.3.8L12 22.1c.2.2.5.3.8.3s.6-.1.8-.3.3-.5.3-.8 0-.3-.1-.6L12 21Z"/><path d="m21 12-2.1-1.9c-.2-.2-.3-.5-.3-.8s.1-.6.3-.8L22.1 12c.2.2.3.5.3.8s-.1.6-.3.8L21 12Z"/><path d="m3 12 2.1-1.9c-.2-.2.3-.5.3-.8s-.1-.6-.3-.8L1.9 12c-.2.2-.3.5-.3.8s.1.6.3.8L3 12Z"/><path d="m16 8-2 2h-4l-2-2m4-4h-4"/></svg>
+                                            Refine Slide Content
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="notes-container-${index}" class="mt-8 text-gray-800"></div>
+                            `;
+                            break;
+                        case 'img-right':
+                            slideContent = `
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 h-full">
+                                    <div class="order-1 flex flex-col justify-center ${currentTheme.text} space-y-4">
+                                        <h3 class="text-3xl md:text-4xl font-bold">${slide.title}</h3>
+                                        <ul class="${currentTheme.bullets} ml-6 space-y-2">
+                                            ${slide.points.map(point => `<li>${point}</li>`).join('')}
+                                        </ul>
+                                        <button class="refine-slide-button text-sm mt-4 text-white hover:text-indigo-200 transition-colors flex items-center gap-1">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles w-4 h-4"><path d="m12 3-1.9 2.1c-.2.2-.5.3-.8.3-.3 0-.6-.1-.8-.3-.2-.2-.3-.5-.3-.8 0-.3.1-.6.3-.8L12 1.9c.2-.2.5-.3.8-.3s.6.1.8.3.3.5.3.8-.1.6-.3.8L12 3Z"/><path d="m12 21-1.9-2.1c-.2-.2-.5-.3-.8-.3-.3 0-.6.1-.8.3-.2.2-.3.5-.3.8 0 .3.1.6.3.8L12 22.1c.2.2.5.3.8.3s.6-.1.8-.3.3-.5.3-.8 0-.3-.1-.6L12 21Z"/><path d="m21 12-2.1-1.9c-.2-.2-.3-.5-.3-.8s.1-.6.3-.8L22.1 12c.2.2.3.5.3.8s-.1.6-.3.8L21 12Z"/><path d="m3 12 2.1-1.9c-.2-.2.3-.5.3-.8s-.1-.6-.3-.8L1.9 12c-.2.2-.3.5-.3.8s.1.6.3.8L3 12Z"/><path d="m16 8-2 2h-4l-2-2m4-4h-4"/></svg>
+                                            Refine Slide Content
+                                        </button>
+                                    </div>
+                                    <div class="order-2 flex items-center" id="image-container-${index}"></div>
+                                </div>
+                                <div id="notes-container-${index}" class="mt-8 text-gray-800"></div>
+                            `;
+                            break;
+                        case 'full-image':
+                            slideContent = `
+                                <div class="absolute inset-0 z-0" id="image-container-${index}"></div>
+                                <div class="relative z-10 flex flex-col justify-end h-full p-8 text-white bg-black bg-opacity-40 rounded-2xl">
+                                    <h3 class="text-3xl md:text-4xl font-bold mb-4">${slide.title}</h3>
+                                    <ul class="list-disc ml-6 space-y-2">
+                                        ${slide.points.map(point => `<li>${point}</li>`).join('')}
+                                    </ul>
+                                    <button class="refine-slide-button text-sm mt-4 text-white hover:text-indigo-200 transition-colors flex items-center gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles w-4 h-4"><path d="m12 3-1.9 2.1c-.2.2-.5.3-.8.3-.3 0-.6-.1-.8-.3-.2-.2-.3-.5-.3-.8 0-.3.1-.6.3-.8L12 1.9c.2-.2.5-.3.8-.3s.6.1.8.3.3.5.3.8-.1.6-.3.8L12 3Z"/><path d="m12 21-1.9-2.1c-.2-.2-.5-.3-.8-.3-.3 0-.6.1-.8.3-.2.2-.3.5-.3.8 0 .3.1.6.3.8L12 22.1c.2.2.5.3.8.3s.6-.1.8-.3.3-.5.3-.8 0-.3-.1-.6L12 21Z"/><path d="m21 12-2.1-1.9c-.2-.2-.3-.5-.3-.8s.1-.6.3-.8L22.1 12c.2.2.3.5.3.8s-.1.6-.3.8L21 12Z"/><path d="m3 12 2.1-1.9c-.2-.2.3-.5.3-.8s-.1-.6-.3-.8L1.9 12c-.2.2-.3.5-.3.8s.1.6.3.8L3 12Z"/><path d="m16 8-2 2h-4l-2-2m4-4h-4"/></svg>
+                                        Refine Slide Content
+                                    </button>
+                                </div>
+                                <div id="notes-container-${index}" class="mt-8 text-gray-800"></div>
+                            `;
+                            break;
+                        case 'title-only':
+                            slideContent = `
+                                <div class="flex flex-col justify-center items-center h-full p-8 ${currentTheme.text}">
+                                    <h3 class="text-5xl font-bold text-center">${slide.title}</h3>
+                                    <button class="refine-slide-button text-sm mt-4 text-white hover:text-indigo-200 transition-colors flex items-center gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles w-4 h-4"><path d="m12 3-1.9 2.1c-.2.2-.5.3-.8.3-.3 0-.6-.1-.8-.3-.2-.2-.3-.5-.3-.8 0-.3.1-.6.3-.8L12 1.9c.2-.2.5-.3.8-.3s.6.1.8.3.3.5.3.8-.1.6-.3.8L12 3Z"/><path d="m12 21-1.9-2.1c-.2-.2-.5-.3-.8-.3-.3 0-.6.1-.8.3-.2.2-.3.5-.3.8 0 .3.1.6.3.8L12 22.1c.2.2.5.3.8.3s.6-.1.8-.3.3-.5.3-.8 0-.3-.1-.6L12 21Z"/><path d="m21 12-2.1-1.9c-.2-.2-.3-.5-.3-.8s.1-.6.3-.8L22.1 12c.2.2.3.5.3.8s-.1.6-.3.8L21 12Z"/><path d="m3 12 2.1-1.9c-.2-.2.3-.5.3-.8s-.1-.6-.3-.8L1.9 12c-.2.2-.3.5-.3.8s.1.6.3.8L3 12Z"/><path d="m16 8-2 2h-4l-2-2m4-4h-4"/></svg>
+                                        Refine Slide Content
+                                    </button>
+                                </div>
+                                <div id="notes-container-${index}" class="mt-8 text-gray-800"></div>
+                            `;
+                            break;
+                        case 'split-columns':
+                            const halfIndex = Math.ceil(slide.points.length / 2);
+                            slideContent = `
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-8 h-full">
+                                    <div class="flex flex-col justify-center ${currentTheme.text} space-y-4">
+                                        <h3 class="text-3xl md:text-4xl font-bold">${slide.title}</h3>
+                                        <ul class="${currentTheme.bullets} ml-6 space-y-2">
+                                            ${slide.points.slice(0, halfIndex).map(point => `<li>${point}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                    <div class="flex flex-col justify-center ${currentTheme.text} space-y-4">
+                                        <ul class="${currentTheme.bullets} ml-6 space-y-2">
+                                            ${slide.points.slice(halfIndex).map(point => `<li>${point}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div id="notes-container-${index}" class="mt-8 text-gray-800"></div>
+                            `;
+                            break;
+                        case 'quote':
+                            const quote = slide.points[0] || 'A great quote here.';
+                            slideContent = `
+                                <div class="flex flex-col justify-center items-center h-full p-8 ${currentTheme.text} text-center">
+                                    <blockquote class="text-4xl font-bold italic border-l-4 border-current pl-4">"${quote}"</blockquote>
+                                    <cite class="mt-4 text-xl font-medium">- ${slide.title}</cite>
+                                    <button class="refine-slide-button text-sm mt-4 text-white hover:text-indigo-200 transition-colors flex items-center gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-sparkles w-4 h-4"><path d="m12 3-1.9 2.1c-.2.2-.5.3-.8.3-.3 0-.6-.1-.8-.3-.2-.2-.3-.5-.3-.8 0-.3.1-.6.3-.8L12 1.9c.2-.2.5-.3.8-.3s.6.1.8.3.3.5.3.8-.1.6-.3.8L12 3Z"/><path d="m12 21-1.9-2.1c-.2-.2-.5-.3-.8-.3-.3 0-.6.1-.8.3-.2.2-.3.5-.3.8 0 .3.1.6.3.8L12 22.1c.2.2.5.3.8.3s.6-.1.8-.3.3-.5.3-.8 0-.3-.1-.6L12 21Z"/><path d="m21 12-2.1-1.9c-.2-.2-.3-.5-.3-.8s.1-.6.3-.8L22.1 12c.2.2.3.5.3.8s-.1.6-.3.8L21 12Z"/><path d="m3 12 2.1-1.9c-.2-.2.3-.5.3-.8s-.1-.6-.3-.8L1.9 12c-.2.2-.3.5-.3.8s.1.6.3.8L3 12Z"/><path d="m16 8-2 2h-4l-2-2m4-4h-4"/></svg>
+                                        Refine Slide Content
+                                    </button>
+                                </div>
+                                <div id="notes-container-${index}" class="mt-8 text-gray-800"></div>
+                            `;
+                            break;
+                        case 'image-grid':
+                             slideContent = `
+                                <div class="grid grid-cols-2 gap-4 h-full">
+                                    <div id="image-grid-container-1-${index}" class="image-container"></div>
+                                    <div id="image-grid-container-2-${index}" class="image-container"></div>
+                                    <div id="image-grid-container-3-${index}" class="image-container"></div>
+                                    <div id="image-grid-container-4-${index}" class="image-container"></div>
+                                </div>
+                                <h3 class="mt-4 text-3xl md:text-4xl font-bold text-center ${currentTheme.text}">${slide.title}</h3>
+                                <div id="notes-container-${index}" class="mt-8 text-gray-800"></div>
+                            `;
+                            break;
+                    }
+                    
+                    slideElement.innerHTML = slideContent;
+                    slidesArea.appendChild(slideElement);
+
+                    if (currentLayout === 'img-left' || currentLayout === 'img-right' || currentLayout === 'full-image') {
+                        document.getElementById(`image-container-${index}`).appendChild(imageContainer);
+                        imageContainer.innerHTML = `<div class="spinner"></div>`;
+                        const imageUrl = await generateImage(slide.title);
+                        if (imageUrl) {
+                            imageContainer.innerHTML = `<img src="${imageUrl}" alt="${slide.title}" class="rounded-xl object-cover w-full h-full">`;
+                        } else {
+                            const placeholderBgColor = currentTheme.background.split('to-')[1].split('-')[0];
+                            imageContainer.innerHTML = `<img src="https://placehold.co/800x450/${placeholderBgColor}?text=${encodeURIComponent(slide.title)}" alt="${slide.title}" class="rounded-xl object-cover w-full h-full">`;
+                            showMessage(`Image generation failed for slide "${slide.title}". Using a placeholder image.`, 'info');
+                        }
+                    } else if (currentLayout === 'image-grid') {
+                        const imagePrompts = slide.points.length >= 4 ? slide.points.slice(0, 4) : [slide.title, slide.title, slide.title, slide.title];
+                        for (let i = 0; i < 4; i++) {
+                            const gridImageContainer = document.getElementById(`image-grid-container-${i + 1}-${index}`);
+                            gridImageContainer.innerHTML = `<div class="spinner"></div>`;
+                            const imageUrl = await generateImage(imagePrompts[i] || slide.title);
+                            if (imageUrl) {
+                                gridImageContainer.innerHTML = `<img src="${imageUrl}" alt="${imagePrompts[i] || slide.title}" class="rounded-xl object-cover w-full h-full">`;
+                            } else {
+                                const placeholderBgColor = currentTheme.background.split('to-')[1].split('-')[0];
+                                gridImageContainer.innerHTML = `<img src="https://placehold.co/400x300/${placeholderBgColor}?text=${encodeURIComponent(imagePrompts[i] || slide.title)}" alt="${imagePrompts[i] || slide.title}" class="rounded-xl object-cover w-full h-full">`;
+                            }
+                        }
+                    }
+                }
+                lucide.createIcons();
+                addRefineListeners();
+            };
+
+            const addRefineListeners = () => {
+                const refineButtons = document.querySelectorAll('.refine-slide-button');
+                refineButtons.forEach((button, index) => {
+                    button.addEventListener('click', () => {
+                        refineModal.dataset.slideIndex = index;
+                        refineModal.classList.remove('hidden');
+                    });
+                });
+            };
+
+            // Main function to call the Gemini API
+            const generatePresentation = async () => {
+                const topic = topicInput.value.trim();
+                if (!topic) {
+                    showMessage('Please enter a topic to generate a presentation.');
+                    return;
+                }
+
+                setLoading(true);
+                presentationPreview.classList.add('hidden');
+                summaryContainer.classList.add('hidden');
+                titlesContainer.classList.add('hidden');
+                qnaContainer.classList.add('hidden');
+
+                // Get advanced options
+                const slideCount = slideCountInput.value || 5;
+                const detailLevel = detailLevelInput.value;
+                const presentationStyle = presentationStyleInput.value;
+                const targetAudience = targetAudienceInput.value;
+                const brandName = brandNameInput.value.trim();
+                const keyTakeaway = keyTakeawayInput.value.trim();
+                const additionalKeywords = additionalKeywordsInput.value.trim();
+                const tone = toneInput.value.trim();
+
+                // Construct a more detailed prompt
+                let prompt = `Create a presentation with exactly ${slideCount} slides about "${topic}".`;
+                if (presentationStyle) {
+                    prompt += ` The style should be ${presentationStyle}.`;
+                }
+                if (targetAudience) {
+                    prompt += ` The target audience is "${targetAudience}".`;
+                }
+                if (detailLevel) {
+                    prompt += ` The level of detail should be a "${detailLevel}" overview.`;
+                }
+                if (brandName) {
+                    prompt += ` The presentation is for a brand named "${brandName}".`;
+                }
+                if (keyTakeaway) {
+                    prompt += ` The key takeaway is "${keyTakeaway}".`;
+                }
+                if (additionalKeywords) {
+                    prompt += ` Include these keywords in the content: "${additionalKeywords}".`;
+                }
+                if (tone) {
+                    prompt += ` The tone should be ${tone}.`;
+                }
+                prompt += ` The presentation should follow a logical flow with an introduction, key points, and a conclusion.`;
+                prompt += ` For each slide, provide a concise title and 3-5 bullet points.`;
+                prompt += ` Format the output as a JSON array of objects, where each object represents a slide.`;
+                prompt += ` The JSON should follow this structure: [{ "title": "Slide Title", "points": ["Point 1", "Point 2"] }, ...]. Do not include any extra text, markdown, or comments, just the raw JSON.`;
+
+
+                let chatHistory = [];
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+                
+                const payload = {
+                    contents: chatHistory,
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    "title": { "type": "STRING" },
+                                    "points": {
+                                        "type": "ARRAY",
+                                        "items": { "type": "STRING" }
+                                    }
+                                },
+                                "propertyOrdering": ["title", "points"]
+                            }
+                        }
+                    }
+                };
+                
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                try {
+                    const response = await fetchWithBackoff(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const jsonText = result.candidates[0].content.parts[0].text;
+                        const parsedJson = JSON.parse(jsonText);
+
+                        currentSlidesData = parsedJson;
+                        await createSlides(currentSlidesData);
+                    } else {
+                        console.error('Unexpected API response structure:', result);
+                        throw new Error('Failed to parse presentation content from API.');
+                    }
+
+                } catch (error) {
+                    console.error('Error generating presentation:', error);
+                    showMessage('An error occurred. Please try again.', 'error');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            // Event listeners
+            generateButton.addEventListener('click', generatePresentation);
+            
+            const redrawSlides = () => {
+                if (currentSlidesData) {
+                    createSlides(currentSlidesData);
+                }
+            };
+            const themePrimaryRadios = document.querySelectorAll('input[name="theme-primary-selector"]');
+            const themeSecondaryRadios = document.querySelectorAll('input[name="theme-secondary-selector"]');
+            const layoutRadios = document.querySelectorAll('input[name="layout-selector"]');
+            
+            themePrimaryRadios.forEach(radio => radio.addEventListener('change', redrawSlides));
+            themeSecondaryRadios.forEach(radio => radio.addEventListener('change', redrawSlides));
+            layoutRadios.forEach(radio => radio.addEventListener('change', redrawSlides));
+            
+            downloadButton.addEventListener('click', () => {
+                const element = document.getElementById('slides-area');
+                const filename = 'AI-Generated-Presentation.pdf';
+                const options = {
+                    margin: [0, 0, 0, 0],
+                    filename: filename,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2 },
+                    jsPDF: { unit: 'pt', format: 'a4', orientation: 'portrait' }
+                };
+                
+                showMessage('Generating PDF...', 'info');
+
+                html2pdf().set(options).from(element).save();
+            });
+            
+            // Event listener for generating speaker notes
+            generateNotesButton.addEventListener('click', async () => {
+                if (!currentSlidesData) {
+                    showMessage('Please generate a presentation first.', 'error');
+                    return;
+                }
+                
+                showMessage('Generating speaker notes...', 'info');
+                generateNotesButton.disabled = true;
+
+                for (const [index, slide] of currentSlidesData.entries()) {
+                    const notesContainer = document.getElementById(`notes-container-${index}`);
+                    notesContainer.innerHTML = `<div class="p-4 bg-gray-200 rounded-lg"><h4 class="font-bold text-lg mb-2">Speaker Notes:</h4><div class="spinner"></div></div>`;
+                    const notes = await generateSpeakerNotes(slide.title, slide.points);
+                    notesContainer.innerHTML = `
+                        <div class="p-4 bg-gray-200 rounded-lg">
+                            <h4 class="font-bold text-lg mb-2">Speaker Notes:</h4>
+                            <p class="text-sm text-gray-700 whitespace-pre-wrap">${notes}</p>
+                        </div>
+                    `;
+                }
+                showMessage('Speaker notes generated successfully!', 'info');
+                generateNotesButton.disabled = false;
+            });
+            
+            // Event listener for generating a summary
+            generateSummaryButton.addEventListener('click', async () => {
+                if (!currentSlidesData) {
+                    showMessage('Please generate a presentation first.', 'error');
+                    return;
+                }
+                
+                summaryContainer.classList.remove('hidden');
+                summaryContainer.innerHTML = `<div class="p-4 bg-white rounded-xl shadow-lg"><h3 class="text-xl font-bold text-gray-700">Presentation Summary</h3><div class="spinner mx-auto mt-2"></div></div>`;
+                generateSummaryButton.disabled = true;
+                
+                const summary = await generateSummary(currentSlidesData);
+                summaryContainer.innerHTML = `
+                    <div class="p-4 bg-white rounded-xl shadow-lg">
+                        <h3 class="text-xl font-bold text-gray-700">Presentation Summary</h3>
+                        <p class="mt-2 text-gray-600 whitespace-pre-wrap">${summary}</p>
+                    </div>
+                `;
+                generateSummaryButton.disabled = false;
+            });
+            
+            // Event listener for suggesting titles
+            suggestTitlesButton.addEventListener('click', async () => {
+                const topic = topicInput.value.trim();
+                if (!topic) {
+                    showMessage('Please enter a topic to suggest titles.', 'error');
+                    return;
+                }
+                
+                titlesContainer.classList.remove('hidden');
+                titlesContainer.innerHTML = `<div class="p-4 bg-white rounded-xl shadow-lg"><h3 class="text-xl font-bold text-gray-700">Suggested Titles</h3><div class="spinner mx-auto mt-2"></div></div>`;
+                suggestTitlesButton.disabled = true;
+                
+                const titles = await suggestTitles(topic);
+                titlesContainer.innerHTML = `
+                    <div class="p-4 bg-white rounded-xl shadow-lg">
+                        <h3 class="text-xl font-bold text-gray-700">Suggested Titles</h3>
+                        <div class="mt-2 text-gray-600 whitespace-pre-wrap">${titles}</div>
+                    </div>
+                `;
+                suggestTitlesButton.disabled = false;
+            });
+            
+            // Event listener for generating Q&A
+            generateQnaButton.addEventListener('click', async () => {
+                if (!currentSlidesData) {
+                    showMessage('Please generate a presentation first.', 'error');
+                    return;
+                }
+                
+                qnaContainer.classList.remove('hidden');
+                qnaContainer.innerHTML = `<div class="p-4 bg-white rounded-xl shadow-lg"><h3 class="text-xl font-bold text-gray-700">Audience Q&A</h3><div class="spinner mx-auto mt-2"></div></div>`;
+                generateQnaButton.disabled = true;
+                
+                const qna = await generateQnA(currentSlidesData);
+                qnaContainer.innerHTML = `
+                    <div class="p-4 bg-white rounded-xl shadow-lg">
+                        <h3 class="text-xl font-bold text-gray-700">Audience Q&A</h3>
+                        <div class="mt-2 text-gray-600 whitespace-pre-wrap">${qna}</div>
+                    </div>
+                `;
+                generateQnaButton.disabled = false;
+            });
+
+            // Event listener for toggling the advanced options section
+            toggleAdvancedOptionsButton.addEventListener('click', () => {
+                const isHidden = advancedOptionsSection.classList.contains('hidden');
+                advancedOptionsSection.classList.toggle('hidden', !isHidden);
+                const toggleIcon = toggleAdvancedOptionsButton.querySelector('i');
+                const toggleText = toggleAdvancedOptionsButton.querySelector('span');
+                if (toggleIcon) {
+                    if (isHidden) {
+                        toggleIcon.setAttribute('data-lucide', 'chevron-up');
+                        toggleText.textContent = 'Hide Advanced Options';
+                    } else {
+                        toggleIcon.setAttribute('data-lucide', 'chevron-down');
+                        toggleText.textContent = 'Show Advanced Options';
+                    }
+                    lucide.createIcons();
+                }
+            });
+            
+            // Voice input button event listener
+            voiceInputButton.addEventListener('click', handleVoiceInput);
+
+            // Event listeners for the refine modal
+            cancelRefineButton.addEventListener('click', () => {
+                refineModal.classList.add('hidden');
+                refineInput.value = '';
+            });
+
+            confirmRefineButton.addEventListener('click', async () => {
+                const refineText = refineInput.value.trim();
+                if (!refineText) {
+                    showMessage('Please enter a request to refine the content.', 'error');
+                    return;
+                }
+                const slideIndex = parseInt(refineModal.dataset.slideIndex);
+                if (isNaN(slideIndex) || slideIndex < 0 || slideIndex >= currentSlidesData.length) {
+                    showMessage('Invalid slide selected.', 'error');
+                    return;
+                }
+
+                refineModal.classList.add('hidden');
+                setLoading(true);
+                
+                const originalSlide = currentSlidesData[slideIndex];
+                const refinedSlide = await refineSlideContent(originalSlide.title, originalSlide.points, refineText);
+                
+                if (refinedSlide) {
+                    currentSlidesData[slideIndex] = refinedSlide;
+                    await createSlides(currentSlidesData);
+                    showMessage('Slide content refined successfully!', 'info');
+                } else {
+                    showMessage('Failed to refine slide content. Please try again.', 'error');
+                }
+                
+                refineInput.value = '';
+                setLoading(false);
+            });
+            
+            lucide.createIcons(); // Initialize icons on page load
+        });
+    </script>
+</body>
+</html>
